@@ -32,17 +32,18 @@ def build_report_markdown(agg_dimension_csv: str, agg_keywords_csv: str, figs_di
 
     def _fmt_dim_table(rows):
         header = (
-            "| 维度 | 任务数 | 均值(均差) | 均值(中位差) | 均值(最小差) | 均值(最大差) | 均值(一致性) |\n"
-            "|---|---:|---:|---:|---:|---:|---:|\n"
+            "| 维度 | 数据条数 | 平均(均值差) | 平均(中位差) | 平均(最小差) | 平均(最大差) | 平均一致性 | 平均Good得分 | 平均Bad得分 |\n"
+            "|---|---:|---:|---:|---:|---:|---:|---:|---:|\n"
         )
         lines = [header]
-        # 排序：按 mean_mean_delta 降序
-        rows_sorted = sorted(rows, key=lambda r: float(r.get("mean_mean_delta", 0.0)), reverse=True)
+        # 排序：按平均(均值差) 降序
+        rows_sorted = sorted(rows, key=lambda r: float(r.get("avg_of_means", 0.0)), reverse=True)
         for r in rows_sorted:
             lines.append(
-                f"| {r.get('dimension','')} | {r.get('tasks','0')} | {float(r.get('mean_mean_delta',0.0)):.3f} | "
-                f"{float(r.get('mean_median_delta',0.0)):.3f} | {float(r.get('mean_min_delta',0.0)):.3f} | "
-                f"{float(r.get('mean_max_delta',0.0)):.3f} | {float(r.get('mean_consistency',0.0)):.3f} |"
+                f"| {r.get('dimension','')} | {r.get('tasks','0')} | {float(r.get('avg_of_means',0.0)):.3f} | "
+                f"{float(r.get('avg_of_medians',0.0)):.3f} | {float(r.get('avg_of_mins',0.0)):.3f} | "
+                f"{float(r.get('avg_of_maxes',0.0)):.3f} | {float(r.get('avg_consistency',0.0)):.3f} | "
+                f"{float(r.get('avg_good_score',0.0)):.3f} | {float(r.get('avg_bad_score',0.0)):.3f} |"
             )
         return "\n".join(lines)
 
@@ -59,6 +60,7 @@ def build_report_markdown(agg_dimension_csv: str, agg_keywords_csv: str, figs_di
     md.append(f"# 1vN 代码质量分析报告\n\n生成时间：{ts}\n")
     md.append("## 维度差概览\n")
     md.append(_fmt_dim_table(dim_rows))
+    md.append("\n> 说明：Good/Bad 得分范围 0-5，数值越高表示质量越好。")
     md.append("\n\n")
     md.append("## 全局区分性关键词（Top-50）\n")
     md.append(_fmt_kw_table(kw_rows, topn=50))

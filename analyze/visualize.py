@@ -124,7 +124,7 @@ def plot_task_keywords_bar(task_json_path: str, out_path: str) -> str:
 
 
 def plot_global_radar(agg_dimension_csv: str, out_path: str) -> str:
-    """绘制九维全局雷达图（使用 mean_mean_delta）。"""
+    """绘制九维全局雷达图，比较 good_code 与 bad_code 的平均得分。"""
     import csv
     import math
     import os
@@ -142,24 +142,31 @@ def plot_global_radar(agg_dimension_csv: str, out_path: str) -> str:
             rows.append(r)
 
     dims = [d.value for d in Dimension]
-    values = []
+    good_values = []
+    bad_values = []
     for d in dims:
         r = next((x for x in rows if x.get("dimension") == d), None)
-        values.append(float(r.get("mean_mean_delta", 0.0)) if r else 0.0)
+        good_values.append(float(r.get("avg_good_score", 0.0)) if r else 0.0)
+        bad_values.append(float(r.get("avg_bad_score", 0.0)) if r else 0.0)
 
     # 闭合雷达多边形
     labels = dims + [dims[0]]
-    data = values + [values[0]]
+    good_data = good_values + [good_values[0]]
+    bad_data = bad_values + [bad_values[0]]
     angles = [n / float(len(dims)) * 2 * math.pi for n in range(len(dims))]
     angles += [angles[0]]
 
     plt.figure(figsize=(8, 8))
     ax = plt.subplot(111, polar=True)
-    ax.plot(angles, data, linewidth=2, color="#1f77b4")
-    ax.fill(angles, data, color="#1f77b4", alpha=0.25)
+    ax.plot(angles, good_data, linewidth=2, color="#2ca02c", label="Good code")
+    ax.fill(angles, good_data, color="#2ca02c", alpha=0.25)
+    ax.plot(angles, bad_data, linewidth=2, color="#d62728", label="Bad code")
+    ax.fill(angles, bad_data, color="#d62728", alpha=0.15)
+    ax.set_ylim(0, 5)
     ax.set_thetagrids([a * 180 / math.pi for a in angles[:-1]], dims)
-    ax.set_title("Overall Quality Gap: Good vs Bad Code (9 Dimensions)")
+    ax.set_title("Average Scores by Dimension: Good vs Bad Code")
     ax.grid(True, linestyle=":", alpha=0.5)
+    ax.legend(loc="upper right", bbox_to_anchor=(1.2, 1.1))
     os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
     plt.tight_layout()
     plt.savefig(out_path, dpi=150)
@@ -170,7 +177,7 @@ def plot_global_radar(agg_dimension_csv: str, out_path: str) -> str:
 def plot_global_heatmaps(agg_dimension_csv: str, out_path_prefix: str) -> str:
     """绘制维度统计热力图（行=指标，列=维度）。
 
-    指标：mean_mean_delta / mean_median_delta / mean_min_delta / mean_max_delta / mean_consistency
+    指标：avg_of_means / avg_of_medians / avg_of_mins / avg_of_maxes / avg_consistency
     输出：{out_path_prefix}/global_heatmap.png
     返回：图片路径
     """
@@ -191,12 +198,20 @@ def plot_global_heatmaps(agg_dimension_csv: str, out_path_prefix: str) -> str:
 
     dims = [d.value for d in Dimension]
     metrics = [
-        "mean_mean_delta",
-        "mean_median_delta",
-        "mean_min_delta",
-        "mean_max_delta",
-        "mean_consistency",
+        "avg_of_means",
+        "avg_of_medians",
+        "avg_of_mins",
+        "avg_of_maxes",
+        "avg_consistency",
     ]
+
+    metric_labels = {
+        "avg_of_means": "Avg of mean deltas",
+        "avg_of_medians": "Avg of median deltas",
+        "avg_of_mins": "Avg of min deltas",
+        "avg_of_maxes": "Avg of max deltas",
+        "avg_consistency": "Avg consistency (τ≥2)",
+    }
 
     # 使用原生 list 构建二维数据，避免依赖 numpy
     mat = [[0.0 for _ in range(len(dims))] for _ in range(len(metrics))]
@@ -208,7 +223,7 @@ def plot_global_heatmaps(agg_dimension_csv: str, out_path_prefix: str) -> str:
     plt.figure(figsize=(12, 4.8))
     im = plt.imshow(mat, aspect="auto", cmap="YlOrRd")
     plt.colorbar(im, fraction=0.046, pad=0.04, label="Value")
-    plt.yticks(range(len(metrics)), metrics)
+    plt.yticks(range(len(metrics)), [metric_labels[m] for m in metrics])
     plt.xticks(range(len(dims)), dims, rotation=30, ha="right")
     plt.title("Quality Gap Statistics Across Multiple Tasks")
     out_path = out_path_prefix

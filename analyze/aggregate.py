@@ -31,7 +31,8 @@ def aggregate_dimension_stats(per_task: Iterable[dict]) -> List[dict]:
     """计算所有任务在各维度上的全局统计。
 
     输入为 per_task 的 JSON dict 序列；输出为每维一行的统计 dict：
-    {dimension, tasks, mean_mean_delta, mean_median_delta, mean_min_delta, mean_max_delta, mean_consistency}
+    {dimension, tasks, avg_of_means, avg_of_medians, avg_of_mins, avg_of_maxes, avg_consistency,
+     avg_good_score, avg_bad_score}
     """
     # 维度 -> 各项列表
     acc: Dict[str, Dict[str, List[float]]] = {
@@ -41,6 +42,8 @@ def aggregate_dimension_stats(per_task: Iterable[dict]) -> List[dict]:
             "min_delta": [],
             "max_delta": [],
             "consistency": [],
+            "good_scores": [],
+            "bad_scores": [],
         }
         for d in Dimension
     }
@@ -62,6 +65,25 @@ def aggregate_dimension_stats(per_task: Iterable[dict]) -> List[dict]:
                 # 跳过异常数据
                 continue
 
+        # 额外：统计原始 good/bad 分数用于雷达图
+        per_bad = item.get("per_bad_comparisons") or []
+        for cmp in per_bad:
+            dim_scores = (cmp.get("dimension_scores") or {})
+            for d in Dimension:
+                name = d.value
+                detail = dim_scores.get(name)
+                if not detail:
+                    continue
+                try:
+                    good_val = detail.get("good")
+                    bad_val = detail.get("bad")
+                    if good_val is not None:
+                        acc[name]["good_scores"].append(float(good_val))
+                    if bad_val is not None:
+                        acc[name]["bad_scores"].append(float(bad_val))
+                except Exception:
+                    continue
+
     rows: List[dict] = []
     for name, lists in acc.items():
         def _avg(xs: List[float]) -> float:
@@ -77,11 +99,13 @@ def aggregate_dimension_stats(per_task: Iterable[dict]) -> List[dict]:
                     len(lists["max_delta"]),
                     len(lists["consistency"]),
                 ),
-                "mean_mean_delta": _avg(lists["mean_delta"]),
-                "mean_median_delta": _avg(lists["median_delta"]),
-                "mean_min_delta": _avg(lists["min_delta"]),
-                "mean_max_delta": _avg(lists["max_delta"]),
-                "mean_consistency": _avg(lists["consistency"]),
+                "avg_of_means": _avg(lists["mean_delta"]),
+                "avg_of_medians": _avg(lists["median_delta"]),
+                "avg_of_mins": _avg(lists["min_delta"]),
+                "avg_of_maxes": _avg(lists["max_delta"]),
+                "avg_consistency": _avg(lists["consistency"]),
+                "avg_good_score": _avg(lists["good_scores"]),
+                "avg_bad_score": _avg(lists["bad_scores"]),
             }
         )
     return rows
@@ -144,11 +168,13 @@ def export_aggregates(per_task_path: str, out_dimension_csv: str, out_keywords_c
             fieldnames=[
                 "dimension",
                 "tasks",
-                "mean_mean_delta",
-                "mean_median_delta",
-                "mean_min_delta",
-                "mean_max_delta",
-                "mean_consistency",
+                "avg_of_means",
+                "avg_of_medians",
+                "avg_of_mins",
+                "avg_of_maxes",
+                "avg_consistency",
+                "avg_good_score",
+                "avg_bad_score",
             ],
         )
         writer.writeheader()

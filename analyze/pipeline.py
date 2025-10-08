@@ -80,7 +80,6 @@ def run_pipeline(
 def main() -> int:
     input_jsonl = os.environ.get("INPUT_JSONL", "data/tasks.jsonl")
     output_dir = os.environ.get("OUTPUT_DIR", "outputs")
-    model = os.environ.get("MODEL", "vllm")
     from openai import OpenAI
 
     client = OpenAI(
@@ -88,9 +87,7 @@ def main() -> int:
         api_key="EMPTY"  # vLLM默认不验证
     )
 
-
-
-    paths = run_pipeline(input_jsonl=input_jsonl, output_dir=output_dir, model=client)
+    paths = run_pipeline(input_jsonl=input_jsonl, output_dir=output_dir, client=client)
     for k, v in paths.items():
         print(f"{k}: {v}")
     return 0

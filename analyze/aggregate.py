@@ -13,9 +13,29 @@ from typing import Dict, Iterable, List, Tuple
 import csv
 import json
 import os
+import re
 
 from .schemas import Dimension
 from .io_utils import ensure_dir
+
+
+# 中文字符检测与归一
+_CN_CHAR_RE = re.compile(r"[\u4e00-\u9fff]")
+
+def _normalize_phrase_cn(s: str) -> str:
+    """仅保留包含中文的短语；返回规范化后的短语，不含中文则返回空串。
+
+    规则：
+    - 去首尾空白；
+    - 若短语中不包含任何中文字符，返回空串（用于过滤纯英文/符号项）；
+    - 可在此扩展同义词合并/清洗逻辑。
+    """
+    s = (s or "").strip()
+    if not s:
+        return ""
+    if not _CN_CHAR_RE.search(s):
+        return ""
+    return s
 
 
 def _iter_jsonl(path: str):
@@ -50,18 +70,26 @@ def aggregate_dimension_stats(per_task: Iterable[dict]) -> List[dict]:
 
     for item in per_task:
         per_bad = item.get("per_bad_comparisons") or []
-        # 先为每个维度收集当前任务的 delta 列表
+        # 先为每个维度收集当前任务的 delta 列表（统一用 good - bad 计算）
         per_dim_deltas: Dict[str, List[float]] = {d.value: [] for d in Dimension}
         for cmp in per_bad:
             dim_scores = (cmp.get("dimension_scores") or {})
             for d in Dimension:
                 name = d.value
-                detail = dim_scores.get(name)
-                if not detail:
-                    continue
+                detail = dim_scores.get(name) or {}
                 try:
-                    delta_val = float(detail.get("delta", 0.0))
+                    good_val = detail.get("good")
+                    bad_val = detail.get("bad")
+                    if good_val is None or bad_val is None:
+                        continue
+                    g = float(good_val)
+                    b = float(bad_val)
+                    delta_val = g - b
                     per_dim_deltas[name].append(delta_val)
+
+                    # 同时累计原始分数用于雷达图
+                    acc[name]["good_scores"].append(g)
+                    acc[name]["bad_scores"].append(b)
                 except Exception:
                     continue
 
@@ -85,24 +113,7 @@ def aggregate_dimension_stats(per_task: Iterable[dict]) -> List[dict]:
             acc[name]["max_delta"].append(round(max_delta, 6))
             acc[name]["consistency"].append(round(consistency, 6))
 
-        # 额外：统计原始 good/bad 分数用于雷达图
-        per_bad = item.get("per_bad_comparisons") or []
-        for cmp in per_bad:
-            dim_scores = (cmp.get("dimension_scores") or {})
-            for d in Dimension:
-                name = d.value
-                detail = dim_scores.get(name)
-                if not detail:
-                    continue
-                try:
-                    good_val = detail.get("good")
-                    bad_val = detail.get("bad")
-                    if good_val is not None:
-                        acc[name]["good_scores"].append(float(good_val))
-                    if bad_val is not None:
-                        acc[name]["bad_scores"].append(float(bad_val))
-                except Exception:
-                    continue
+        # 已在上述循环中同步累积 good_scores / bad_scores
 
     rows: List[dict] = []
     for name, lists in acc.items():
@@ -190,7 +201,7 @@ def aggregate_patterns(per_task: Iterable[dict]) -> Tuple[List[dict], List[dict]
             for cmp in per_bad:
                 patterns = cmp.get(key) or []
                 for pat in patterns:
-                    phrase = str(pat).strip()
+                    phrase = _normalize_phrase_cn(str(pat))
                     if not phrase:
                         continue
                     counts[phrase] = counts.get(phrase, 0.0) + 1.0

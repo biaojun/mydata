@@ -35,10 +35,18 @@ def build_1vN_prompt(task: TaskInput) -> str:
 我将提供 同一任务 的：任务说明（prompt）、一份 good_code，以及多份 bad_code。
 你的目标是：
 
-1. 对 good_code vs 每个 bad_code 逐一比较，覆盖以下 9 个维度（0–5 分）：correctness、robustness、readability、maintainability、complexity、performance、testing、security_dependency、style_consistency。对每维给出（good、bad、delta、evidence）。当 |delta|≥2 必须给关键证据。
-2. 针对每个 bad，抽取区分性的关键词（phrase、dimension、weight），并总结 2–5 条 positive_patterns 与 2–5 条 anti_patterns，给出 2–5 条 actionable_rules_local。
-3. 不要做任何任务级聚合统计；仅返回逐个 bad 的详细比较结果，让后续程序自行汇总。
+1. 对 good_code vs 每个 bad_code 逐一比较，覆盖以下 9 个维度（0–5 分）：correctness、robustness、readability、maintainability、complexity、performance、testing、security_dependency、style_consistency。对每维给出（good、bad、evidence）。
+  评分标准（范围为 0–5；以下为 1–5 的简要口径，0 表示“未体现/无法评估”）：
+  - 5 分：优秀/行业最佳实践，设计与实现全面到位，几乎无改进空间；
+  - 4 分：良好/大体规范，偶有可改进点但不影响整体质量；
+  - 3 分：一般/可接受，存在明显改进空间；
+  - 2 分：较差/多处问题，需要较大幅度整改；
+  - 1 分：很差/严重违背规范或存在重大缺陷；
+  当 |good - bad| ≥ 2 时，必须提供关键证据（evidence）说明差异来源。
+2. 针对每个bad，抽取区分性的关键词（phrase、dimension、weight），并总结 2–5 条 positive_patterns 与 2–5 条 anti_patterns，给出 2–5 条 actionable_rules_local。所有关键词与模式短语必须使用简体中文；如确需英文术语，请在中文后以括号标注英文缩写，例如“异常处理（try-except）”。
+3. 不要做任何任务级聚合统计；仅返回逐个good和bad的详细比较结果，让后续程序自行汇总。
 4. 仅输出严格符合 JSON Schema 的结构化结果，不要额外文本。
+
 
 输入：
 {{
@@ -56,15 +64,15 @@ def build_1vN_prompt(task: TaskInput) -> str:
     {{
       "bad_id": "...",
       "dimension_scores": {{
-        "correctness": {{"good": 0-5, "bad": 0-5, "delta": -5..5, "evidence": "?"}},
-        "robustness":  {{"good": 0-5, "bad": 0-5, "delta": -5..5, "evidence": "?"}},
-        "readability": {{"good": 0-5, "bad": 0-5, "delta": -5..5, "evidence": "?"}},
-        "maintainability": {{"good": 0-5, "bad": 0-5, "delta": -5..5, "evidence": "?"}},
-        "complexity": {{"good": 0-5, "bad": 0-5, "delta": -5..5, "evidence": "?"}},
-        "performance": {{"good": 0-5, "bad": 0-5, "delta": -5..5, "evidence": "?"}},
-        "testing": {{"good": 0-5, "bad": 0-5, "delta": -5..5, "evidence": "?"}},
-        "security_dependency": {{"good": 0-5, "bad": 0-5, "delta": -5..5, "evidence": "?"}},
-        "style_consistency": {{"good": 0-5, "bad": 0-5, "delta": -5..5, "evidence": "?"}}
+        "correctness": {{"good": 0-5, "bad": 0-5,  "evidence": "?"}},
+        "robustness":  {{"good": 0-5, "bad": 0-5,  "evidence": "?"}},
+        "readability": {{"good": 0-5, "bad": 0-5,  "evidence": "?"}},
+        "maintainability": {{"good": 0-5, "bad": 0-5,  "evidence": "?"}},
+        "complexity": {{"good": 0-5, "bad": 0-5,  "evidence": "?"}},
+        "performance": {{"good": 0-5, "bad": 0-5,  "evidence": "?"}},
+        "testing": {{"good": 0-5, "bad": 0-5,  "evidence": "?"}},
+        "security_dependency": {{"good": 0-5, "bad": 0-5,  "evidence": "?"}},
+        "style_consistency": {{"good": 0-5, "bad": 0-5,  "evidence": "?"}}
       }},
       "discriminative_keywords": [{{"phrase": "...", "dimension": "...", "weight": 0.0}}],
       "positive_patterns": ["..."],

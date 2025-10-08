@@ -13,8 +13,8 @@
 
 ## 2) 项目目标
 
-1. 对每条任务执行**1vN 对照评**，输出统一 JSON（维度打分、差异、关键词、规则）。
-2. 进行**任务级聚合**（对所有 bad 的比较结果做 mean/median/min/max/consistency）。
+1. 对每条任务执行**1vN 对照评**，输出统一 JSON（仅维度打分 good/bad 与证据、关键词、规则）。
+2. 不再要求模型端做任务级聚合，由程序端根据 good/bad 计算 delta=good-bad 并完成 mean/median/min/max/consistency。
 3. 做**跨任务全局聚合**，产出图表与“好/坏范式清单”。
 
 ---
@@ -46,15 +46,15 @@
     {
       "bad_id": "b1",
       "dimension_scores": {
-        "correctness": {"good": 5, "bad": 2, "delta": 3, "evidence": "…"},
-        "robustness":  {"good": 4, "bad": 1, "delta": 3, "evidence": "…"},
-        "readability": {"good": 5, "bad": 3, "delta": 2, "evidence": "…"},
-        "maintainability": {"good": 4, "bad": 2, "delta": 2, "evidence": "…"},
-        "complexity": {"good": 5, "bad": 4, "delta": 1, "evidence": "…"},
-        "performance": {"good": 4, "bad": 3, "delta": 1, "evidence": "…"},
-        "testing": {"good": 3, "bad": 1, "delta": 2, "evidence": "…"},
-        "security_dependency": {"good": 4, "bad": 1, "delta": 3, "evidence": "…"},
-        "style_consistency": {"good": 5, "bad": 2, "delta": 3, "evidence": "…"}
+  "correctness": {"good": 5, "bad": 2, "evidence": "…"},
+  "robustness":  {"good": 4, "bad": 1, "evidence": "…"},
+  "readability": {"good": 5, "bad": 3, "evidence": "…"},
+  "maintainability": {"good": 4, "bad": 2, "evidence": "…"},
+  "complexity": {"good": 5, "bad": 4, "evidence": "…"},
+  "performance": {"good": 4, "bad": 3, "evidence": "…"},
+  "testing": {"good": 3, "bad": 1, "evidence": "…"},
+  "security_dependency": {"good": 4, "bad": 1, "evidence": "…"},
+  "style_consistency": {"good": 5, "bad": 2, "evidence": "…"}
       },
       "discriminative_keywords": [
         {"phrase": "输入校验", "dimension": "robustness", "weight": 0.72},
@@ -65,31 +65,18 @@
       "actionable_rules_local": ["…短句…", "…"]
     }
   ],
-  "task_level_agg": {
-    "dimension_agg": {
-      "correctness": {"mean_delta": 2.1, "median_delta": 2, "min_delta": 1, "max_delta": 3, "consistency": 0.67},
-      "robustness":  {"mean_delta": 2.6, "median_delta": 3, "min_delta": 1, "max_delta": 4, "consistency": 0.83}
-      // 其余维度同样结构
-    },
-    "top_positive_patterns": ["…按频次/投票保留…"],
-    "top_anti_patterns": ["…"],
-    "aggregated_keywords": [
-      {"phrase": "类型注解", "weight": 1.84, "dimension": "readability"},
-      {"phrase": "模块化",   "weight": 1.63, "dimension": "maintainability"}
-    ],
-    "task_actionable_rules": ["…合并去重后 5–10 条…"]
-  }
+  "task_level_agg": null
 }
 ```
 
-> 说明：让模型**一次性**对每个 bad_i 形成 1v1 结论，**并在同一次回应里完成任务级聚合**（mean/median/min/max/consistency 与合并关键词/模式/规则），减少二次调用与上下文丢失。
+> 说明：让模型**一次性**对每个 bad_i 形成 1v1 结论；任务级与跨任务聚合（mean/median/min/max/consistency）由**程序端**基于 good/bad 自动计算 delta=good-bad 并汇总，避免模型侧不一致。
 
 ---
 
 ## 4) 评价维度（固定 9 维，0–5 分）
 
 * correctness / robustness / readability / maintainability / complexity / performance / testing / security_dependency / style_consistency
-  **差异值**：`delta = good - bad`。当 `|delta| ≥ 2`，要求提供`evidence`。
+  **差异值**：由程序端计算 `delta = good - bad`。当 `|good-bad| ≥ 2`，要求模型提供`evidence`。
 
 ---
 
@@ -119,9 +106,9 @@
 > 我将提供 **同一任务** 的：任务说明（prompt）、一份 good_code，以及多份 bad_code。
 > 你的目标是：
 >
-> 1. 对 **good_code vs 每个 bad_code** 逐一比较，覆盖以下 9 个维度（0–5 分）：correctness、robustness、readability、maintainability、complexity、performance、testing、security_dependency、style_consistency。对每维给出（good、bad、delta、evidence）。当 |delta|≥2 必须给关键证据。
+> 1. 对 **good_code vs 每个 bad_code** 逐一比较，覆盖以下 9 个维度（0–5 分）：correctness、robustness、readability、maintainability、complexity、performance、testing、security_dependency、style_consistency。对每维给出（good、bad、evidence）。当 |good-bad|≥2 必须给关键证据。
 > 2. 针对每个 bad，抽取区分性的关键词（phrase、dimension、weight），并总结 2–5 条 positive_patterns（好代码体现的实践）与 2–5 条 anti_patterns（坏代码常见问题），给出 2–5 条可执行的局部规则（actionable_rules_local）。
-> 3. **请在同一次输出中完成任务级聚合**：对 9 维计算 mean_delta、median_delta、min_delta、max_delta、consistency(阈值 τ=2)；合并关键词权重（按 delta 强度加权）；合并并去重 positive/anti patterns，输出最终的 task_actionable_rules（5–10 条）。
+> 3. 不需要任务级聚合；仅输出逐个 bad 的结果。聚合与统计由程序端完成。
 > 4. 仅输出严格符合下列 JSON Schema 的结构化结果，不要额外文本。
 >
 > **输入：**
@@ -165,10 +152,10 @@
 
 ### 全局（跨任务）
 
-* **雷达图**：9 维 Good vs Bad 均值
+* **雷达图**：9 维 Good vs Bad 均值，并以半透明阴影展示二者之间的差异区域
 * **条形图（排序）**：各维 `mean(mean_delta)` + 标注 `consistency`
-* **热力图**：任务 × 维度 的 `mean_delta` 与 `min_delta`
-* **三类词云**：好/坏/区分性（全局）
+* **热力图**：分为两部分显示：上部为 delta 类指标（居中于 0 的发散色带），下部为一致性（顺序色带），X 轴标签只在下部显示以提升可读性
+* **模式词云**：正向模式（positive_patterns）与反模式（anti_patterns）两类（全局）
 * **共现网络（两张）**：好代码关键短语网络 vs 坏代码关键短语网络
 * **火山图**（维度/关键词）：x=全局区分度，y=出现率/一致性 → 右上角=硬范式
 

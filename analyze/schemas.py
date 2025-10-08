@@ -38,8 +38,9 @@ class TaskInput:
 class ScoreDetail:
     good: int
     bad: int
-    delta: int
     evidence: Optional[str] = None
+    # 模型端不再需要返回 delta；为兼容旧数据保留为可选
+    delta: Optional[int] = None
 
 
 @dataclass

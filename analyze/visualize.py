@@ -42,11 +42,15 @@ def plot_task_dimension_lollipop(task_json_path: str, out_path: str) -> str:
     for cmp in obj.get("per_bad_comparisons") or []:
         dim_scores = (cmp.get("dimension_scores") or {})
         for d in dims:
-            detail = dim_scores.get(d)
-            if not detail:
-                continue
+            detail = dim_scores.get(d) or {}
             try:
-                per_dim_values[d].append(float(detail.get("delta", 0.0)))
+                good_val = detail.get("good")
+                bad_val = detail.get("bad")
+                if good_val is None or bad_val is None:
+                    continue
+                g = float(good_val)
+                b = float(bad_val)
+                per_dim_values[d].append(g - b)
             except Exception:
                 continue
 
@@ -197,9 +201,21 @@ def plot_global_radar(agg_dimension_csv: str, out_path: str) -> str:
     plt.figure(figsize=(8, 8))
     ax = plt.subplot(111, polar=True)
     ax.plot(angles, good_data, linewidth=2, color="#2ca02c", label="Good code")
-    ax.fill(angles, good_data, color="#2ca02c", alpha=0.25)
+    ax.fill(angles, good_data, color="#2ca02c", alpha=0.20)
     ax.plot(angles, bad_data, linewidth=2, color="#d62728", label="Bad code")
-    ax.fill(angles, bad_data, color="#d62728", alpha=0.15)
+    ax.fill(angles, bad_data, color="#d62728", alpha=0.12)
+
+    # 在两条曲线之间添加“差异阴影”（纯 Python 计算上下边界）
+    diff_lower = [min(g, b) for g, b in zip(good_data, bad_data)]
+    diff_upper = [max(g, b) for g, b in zip(good_data, bad_data)]
+    ax.fill_between(
+        angles,
+        diff_lower,
+        diff_upper,
+        color="#6baed6",
+        alpha=0.18,
+        label="Gap (|Good - Bad|)"
+    )
     ax.set_ylim(0, 5)
     ax.set_thetagrids([a * 180 / math.pi for a in angles[:-1]], dims)
     ax.set_title("Average Scores by Dimension: Good vs Bad Code")
@@ -245,12 +261,26 @@ def plot_global_heatmaps(agg_dimension_csv: str, out_path_prefix: str) -> str:
         "avg_consistency",
     ]
 
+    # 指标标签（中文精简，减少遮挡）
     metric_labels = {
-        "avg_of_means": "Avg of mean deltas",
-        "avg_of_medians": "Avg of median deltas",
-        "avg_of_mins": "Avg of min deltas",
-        "avg_of_maxes": "Avg of max deltas",
-        "avg_consistency": "Avg consistency (τ≥2)",
+        "avg_of_means": "均值(Δ)",
+        "avg_of_medians": "中位(Δ)",
+        "avg_of_mins": "最小(Δ)",
+        "avg_of_maxes": "最大(Δ)",
+        "avg_consistency": "一致性(τ≥2)",
+    }
+
+    # 维度中文标签，避免英文过长导致遮挡
+    dim_cn = {
+        "correctness": "正确性",
+        "robustness": "鲁棒性",
+        "readability": "可读性",
+        "maintainability": "可维护性",
+        "complexity": "复杂度",
+        "performance": "性能",
+        "testing": "测试",
+        "security_dependency": "安全/依赖",
+        "style_consistency": "风格一致",
     }
 
     # 构建二维数据矩阵
@@ -286,17 +316,19 @@ def plot_global_heatmaps(agg_dimension_csv: str, out_path_prefix: str) -> str:
     cons_cmap = "Greens"
 
     # 画两块子图
-    fig = plt.figure(figsize=(12, 6))
-    gs = gridspec.GridSpec(2, 1, height_ratios=[4, 1], hspace=0.15)
+    # 提升可读性：更大画布 + 约束布局，避免标签被遮挡
+    fig = plt.figure(figsize=(14, 8), constrained_layout=True)
+    gs = gridspec.GridSpec(2, 1, height_ratios=[4, 1], hspace=0.12)
 
     # 上：delta 指标
     ax1 = fig.add_subplot(gs[0])
     im1 = ax1.imshow(delta_mat, aspect="auto", cmap="RdBu_r", norm=delta_norm)
     ax1.set_yticks(range(len(delta_rows_idx)))
-    ax1.set_yticklabels([metric_labels[metrics_all[i]] for i in delta_rows_idx])
+    ax1.set_yticklabels([metric_labels[metrics_all[i]] for i in delta_rows_idx], fontsize=10)
     ax1.set_xticks(range(len(dims)))
-    ax1.set_xticklabels(dims, rotation=30, ha="right")
-    ax1.set_title("Quality Gap (Delta: Good - Bad), centered at 0")
+    # 仅在下图显示 X 轴标签，避免拥挤
+    ax1.set_xticklabels([])
+    ax1.set_title("Quality Gap (Delta: Good - Bad)", pad=6)
     cbar1 = fig.colorbar(im1, ax=ax1, fraction=0.046, pad=0.04)
     cbar1.set_label("Delta (Good - Bad)")
 
@@ -304,9 +336,12 @@ def plot_global_heatmaps(agg_dimension_csv: str, out_path_prefix: str) -> str:
     ax2 = fig.add_subplot(gs[1], sharex=ax1)
     im2 = ax2.imshow(cons_mat, aspect="auto", cmap=cons_cmap, vmin=cons_min, vmax=cons_max)
     ax2.set_yticks([0])
-    ax2.set_yticklabels([metric_labels["avg_consistency"]])
+    ax2.set_yticklabels([metric_labels["avg_consistency"]], fontsize=10)
     ax2.set_xticks(range(len(dims)))
-    ax2.set_xticklabels(dims, rotation=30, ha="right")
+    ax2.set_xticklabels([dim_cn.get(d, d) for d in dims], rotation=35, ha="right", fontsize=9)
+    # 为避免最右侧标签被裁切，适当留白
+    for label in ax2.get_xticklabels():
+        label.set_horizontalalignment("right")
     cbar2 = fig.colorbar(im2, ax=ax2, fraction=0.046, pad=0.04)
     cbar2.set_label("Consistency")
 
@@ -314,7 +349,7 @@ def plot_global_heatmaps(agg_dimension_csv: str, out_path_prefix: str) -> str:
     if os.path.isdir(out_path_prefix):
         out_path = os.path.join(out_path_prefix, "global_heatmap.png")
     os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
-    plt.tight_layout()
+    # constrained_layout 已启用，这里不再调用 tight_layout，防止冲突
     plt.savefig(out_path, dpi=150)
     plt.close()
     return out_path

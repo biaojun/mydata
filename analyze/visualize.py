@@ -241,10 +241,29 @@ def plot_global_heatmaps(agg_dimension_csv: str, out_path_prefix: str) -> str:
         import matplotlib.pyplot as plt
         import matplotlib.colors as mcolors
         import matplotlib.gridspec as gridspec
+        from matplotlib import font_manager as _fm
+        import os as _os
     except Exception as e:
         raise ImportError("需要 matplotlib，安装：pip install matplotlib") from e
 
     from .schemas import Dimension
+
+    # 应用中文字体（与运行时 FONT_PATH 保持一致），并修正负号显示
+    try:
+        _font_path_env = _os.environ.get("FONT_PATH")
+        _fp_path = _font_path_env or _pick_font_path(None)
+        if _fp_path:
+            # 先注册字体，再设置 family 名称，避免未安装导致找不到
+            try:
+                _fm.fontManager.addfont(_fp_path)
+            except Exception:
+                pass
+            _fp = _fm.FontProperties(fname=_fp_path)
+            plt.rcParams["font.family"] = _fp.get_name()
+        plt.rcParams["axes.unicode_minus"] = False
+    except Exception:
+        # 字体不可用时忽略，回退默认字体
+        pass
 
     rows = []
     with open(agg_dimension_csv, "r", encoding="utf-8") as f:
@@ -296,7 +315,7 @@ def plot_global_heatmaps(agg_dimension_csv: str, out_path_prefix: str) -> str:
     delta_mat = [mat[i] for i in delta_rows_idx]
     cons_mat = [mat[cons_row_idx]]
 
-    # 发散色带：以 0 为中心
+    # 发散色带：以 0 为中心，使用更深的中性灰提升可见性
     if delta_mat:
         flat = [v for row in delta_mat for v in row]
         if flat:
@@ -306,6 +325,12 @@ def plot_global_heatmaps(agg_dimension_csv: str, out_path_prefix: str) -> str:
     else:
         max_abs = 1.0
     delta_norm = mcolors.TwoSlopeNorm(vcenter=0.0, vmin=-max_abs, vmax=max_abs)
+    # 自定义蓝-灰-红配色（中心使用较深的 #9e9e9e，而非纯白）
+    _delta_cmap = mcolors.LinearSegmentedColormap.from_list(
+        "BlueGrayRed",
+        ["#2b8cbe", "#9e9e9e", "#e34a33"],
+        N=256,
+    )
 
     # 一致性 0..1（容错：若全相等则扩展范围）
     cons_vals = cons_mat[0] if cons_mat else []
@@ -313,15 +338,7 @@ def plot_global_heatmaps(agg_dimension_csv: str, out_path_prefix: str) -> str:
     cons_max = max(cons_vals) if cons_vals else 1.0
     if cons_min == cons_max:
         cons_min, cons_max = 0.0, max(1.0, cons_max)
-    # 调整灰色为更深的灰色以提高可见性
-    cons_cmap = mcolors.LinearSegmentedColormap.from_list("CustomGray", ["#d9d9d9", "#4d4d4"])
-
-    # 设置中文字体
-    font_path = _pick_font_path()
-    if font_path:
-        from matplotlib import rcParams
-        rcParams["font.sans-serif"] = font_path
-        rcParams["axes.unicode_minus"] = False
+    cons_cmap = "Greens"
 
     # 画两块子图
     # 提升可读性：更大画布 + 约束布局，避免标签被遮挡
@@ -330,7 +347,7 @@ def plot_global_heatmaps(agg_dimension_csv: str, out_path_prefix: str) -> str:
 
     # 上：delta 指标
     ax1 = fig.add_subplot(gs[0])
-    im1 = ax1.imshow(delta_mat, aspect="auto", cmap="RdBu_r", norm=delta_norm)
+    im1 = ax1.imshow(delta_mat, aspect="auto", cmap=_delta_cmap, norm=delta_norm)
     ax1.set_yticks(range(len(delta_rows_idx)))
     ax1.set_yticklabels([metric_labels[metrics_all[i]] for i in delta_rows_idx], fontsize=10)
     ax1.set_xticks(range(len(dims)))

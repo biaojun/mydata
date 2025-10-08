@@ -60,11 +60,11 @@
         {"phrase": "输入校验", "dimension": "robustness", "weight": 0.72},
         {"phrase": "try-except", "dimension": "robustness", "weight": 0.61}
       ],
-      "positive_patterns": ["…短句…", "…"],
       "anti_patterns": ["…短句…", "…"],
       "actionable_rules_local": ["…短句…", "…"]
     }
   ],
+  "positive_patterns": ["…短句…", "…"],
   "task_level_agg": null
 }
 ```

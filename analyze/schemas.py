@@ -55,6 +55,7 @@ class PerBadComparison:
     bad_id: str
     dimension_scores: Dict[Dimension, ScoreDetail] = field(default_factory=dict)
     discriminative_keywords: List[DiscriminativeKeyword] = field(default_factory=list)
+    # 为兼容旧数据，保留 per-bad 级别的 positive_patterns，但推荐使用任务级 positive_patterns
     positive_patterns: List[str] = field(default_factory=list)
     anti_patterns: List[str] = field(default_factory=list)
     actionable_rules_local: List[str] = field(default_factory=list)
@@ -83,6 +84,8 @@ class ModelOutput:
     task_id: str
     prompt_brief: str
     per_bad_comparisons: List[PerBadComparison] = field(default_factory=list)
+    # 新增：任务级别的正向模式，仅生成一次（对应用户需求）。
+    positive_patterns: List[str] = field(default_factory=list)
     task_level_agg: Optional[TaskLevelAggregation] = None
 
 

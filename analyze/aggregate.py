@@ -221,7 +221,40 @@ def aggregate_patterns(per_task: Iterable[dict]) -> Tuple[List[dict], List[dict]
         rows.sort(key=lambda r: (-r["count"], r["pattern"]))
         return rows
 
-    positives = _collect_from_per_bad("positive_patterns")
+    # 正向模式：优先任务级（仅一次），兼容旧 per-bad
+    pos_counts: Dict[str, float] = {}
+    pos_tasks: Dict[str, set] = {}
+    for item in items:
+        task_id = item.get("task_id", "")
+        top_pos = item.get("positive_patterns") or []
+        if top_pos:
+            for pat in top_pos:
+                phrase = _normalize_phrase_cn(str(pat))
+                if not phrase:
+                    continue
+                pos_counts[phrase] = pos_counts.get(phrase, 0.0) + 1.0
+                pos_tasks.setdefault(phrase, set()).add(task_id)
+        else:
+            per_bad = item.get("per_bad_comparisons") or []
+            seen_in_task = set()
+            for cmp in per_bad:
+                for pat in (cmp.get("positive_patterns") or []):
+                    phrase = _normalize_phrase_cn(str(pat))
+                    if not phrase:
+                        continue
+                    pos_counts[phrase] = pos_counts.get(phrase, 0.0) + 1.0
+                    seen_in_task.add(phrase)
+            for phrase in seen_in_task:
+                pos_tasks.setdefault(phrase, set()).add(task_id)
+
+    positives = []
+    for phrase, cnt in pos_counts.items():
+        positives.append({
+            "pattern": phrase,
+            "count": int(cnt),
+            "task_count": len(pos_tasks.get(phrase, set())),
+        })
+    positives.sort(key=lambda r: (-r["count"], r["pattern"]))
     antis = _collect_from_per_bad("anti_patterns")
     return positives, antis
 

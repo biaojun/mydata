@@ -102,8 +102,13 @@ def run_pipeline(
         wordcloud_path = os.path.join(figs_dir, "global_wordcloud.png")
         plot_global_wordcloud(kw_csv, wordcloud_path, font_path=font_path)
         print(f"   ✓ 词云图: {wordcloud_path}")
+    except ImportError as e:
+        print(f"   ⚠ 跳过词云生成: 缺少依赖库 wordcloud")
+        print(f"     安装命令: pip install wordcloud pillow")
+        wordcloud_path = ""
     except Exception as e:
         print(f"   ⚠ 跳过词云生成: {e}")
+        print(f"     提示: 如果是字体错误，可忽略或设置 FONT_PATH 环境变量")
         wordcloud_path = ""
 
     # 6) 生成报告

@@ -275,14 +275,19 @@ def plot_task_wordcloud(task_json_path: str, out_path: str, *, font_path: str | 
         freqs = {"No Keywords": 1.0}
 
     fp = _pick_font_path(font_path)
-    wc = WordCloud(
-        width=1200,
-        height=800,
-        background_color=background_color,
-        font_path=fp,
-        prefer_horizontal=0.9,
-        collocations=False,
-    ).generate_from_frequencies(freqs)
+    
+    # 构建 WordCloud 参数，如果没有字体则不传 font_path（使用默认字体）
+    wc_params = {
+        "width": 1200,
+        "height": 800,
+        "background_color": background_color,
+        "prefer_horizontal": 0.9,
+        "collocations": False,
+    }
+    if fp:  # 只有找到字体文件时才设置
+        wc_params["font_path"] = fp
+    
+    wc = WordCloud(**wc_params).generate_from_frequencies(freqs)
 
     os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
     plt.figure(figsize=(12, 8))
@@ -326,14 +331,19 @@ def plot_global_wordcloud(agg_keywords_csv: str, out_path: str, *, font_path: st
         freqs = {"No Keywords": 1.0}
 
     fp = _pick_font_path(font_path)
-    wc = WordCloud(
-        width=1400,
-        height=900,
-        background_color=background_color,
-        font_path=fp,
-        prefer_horizontal=0.9,
-        collocations=False,
-    ).generate_from_frequencies(freqs)
+    
+    # 构建 WordCloud 参数，如果没有字体则不传 font_path（使用默认字体）
+    wc_params = {
+        "width": 1400,
+        "height": 900,
+        "background_color": background_color,
+        "prefer_horizontal": 0.9,
+        "collocations": False,
+    }
+    if fp:  # 只有找到字体文件时才设置
+        wc_params["font_path"] = fp
+    
+    wc = WordCloud(**wc_params).generate_from_frequencies(freqs)
 
     os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
     plt.figure(figsize=(14, 9))

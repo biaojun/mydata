@@ -213,7 +213,7 @@ def plot_global_radar(agg_dimension_csv: str, out_path: str) -> str:
 
 
 def plot_global_heatmaps(agg_dimension_csv: str, out_path_prefix: str) -> str:
-    """绘制维度统计热力图（行=指标，列=维度）。
+    """绘制维度统计热力图：上=delta类指标(发散色, 0居中)，下=一致性(顺序色)。
 
     指标：avg_of_means / avg_of_medians / avg_of_mins / avg_of_maxes / avg_consistency
     输出：{out_path_prefix}/global_heatmap.png
@@ -223,6 +223,8 @@ def plot_global_heatmaps(agg_dimension_csv: str, out_path_prefix: str) -> str:
     import os
     try:
         import matplotlib.pyplot as plt
+        import matplotlib.colors as mcolors
+        import matplotlib.gridspec as gridspec
     except Exception as e:
         raise ImportError("需要 matplotlib，安装：pip install matplotlib") from e
 
@@ -235,7 +237,7 @@ def plot_global_heatmaps(agg_dimension_csv: str, out_path_prefix: str) -> str:
             rows.append(r)
 
     dims = [d.value for d in Dimension]
-    metrics = [
+    metrics_all = [
         "avg_of_means",
         "avg_of_medians",
         "avg_of_mins",
@@ -251,19 +253,63 @@ def plot_global_heatmaps(agg_dimension_csv: str, out_path_prefix: str) -> str:
         "avg_consistency": "Avg consistency (τ≥2)",
     }
 
-    # 使用原生 list 构建二维数据，避免依赖 numpy
-    mat = [[0.0 for _ in range(len(dims))] for _ in range(len(metrics))]
+    # 构建二维数据矩阵
+    mat = [[0.0 for _ in range(len(dims))] for _ in range(len(metrics_all))]
     for j, d in enumerate(dims):
         r = next((x for x in rows if x.get("dimension") == d), None)
-        for i, m in enumerate(metrics):
+        for i, m in enumerate(metrics_all):
             mat[i][j] = float(r.get(m, 0.0)) if r else 0.0
 
-    plt.figure(figsize=(12, 4.8))
-    im = plt.imshow(mat, aspect="auto", cmap="YlOrRd")
-    plt.colorbar(im, fraction=0.046, pad=0.04, label="Value")
-    plt.yticks(range(len(metrics)), [metric_labels[m] for m in metrics])
-    plt.xticks(range(len(dims)), dims, rotation=30, ha="right")
-    plt.title("Quality Gap Statistics Across Multiple Tasks")
+    # 拆分：delta 指标(前四行) + consistency(最后一行)
+    delta_rows_idx = [0, 1, 2, 3]
+    cons_row_idx = 4
+    delta_mat = [mat[i] for i in delta_rows_idx]
+    cons_mat = [mat[cons_row_idx]]
+
+    # 发散色带：以 0 为中心
+    if delta_mat:
+        flat = [v for row in delta_mat for v in row]
+        if flat:
+            max_abs = max(1e-6, max(abs(min(flat)), abs(max(flat))))
+        else:
+            max_abs = 1.0
+    else:
+        max_abs = 1.0
+    delta_norm = mcolors.TwoSlopeNorm(vcenter=0.0, vmin=-max_abs, vmax=max_abs)
+
+    # 一致性 0..1（容错：若全相等则扩展范围）
+    cons_vals = cons_mat[0] if cons_mat else []
+    cons_min = min(cons_vals) if cons_vals else 0.0
+    cons_max = max(cons_vals) if cons_vals else 1.0
+    if cons_min == cons_max:
+        cons_min, cons_max = 0.0, max(1.0, cons_max)
+    cons_cmap = "Greens"
+
+    # 画两块子图
+    fig = plt.figure(figsize=(12, 6))
+    gs = gridspec.GridSpec(2, 1, height_ratios=[4, 1], hspace=0.15)
+
+    # 上：delta 指标
+    ax1 = fig.add_subplot(gs[0])
+    im1 = ax1.imshow(delta_mat, aspect="auto", cmap="RdBu_r", norm=delta_norm)
+    ax1.set_yticks(range(len(delta_rows_idx)))
+    ax1.set_yticklabels([metric_labels[metrics_all[i]] for i in delta_rows_idx])
+    ax1.set_xticks(range(len(dims)))
+    ax1.set_xticklabels(dims, rotation=30, ha="right")
+    ax1.set_title("Quality Gap (Delta: Good - Bad), centered at 0")
+    cbar1 = fig.colorbar(im1, ax=ax1, fraction=0.046, pad=0.04)
+    cbar1.set_label("Delta (Good - Bad)")
+
+    # 下：一致性
+    ax2 = fig.add_subplot(gs[1], sharex=ax1)
+    im2 = ax2.imshow(cons_mat, aspect="auto", cmap=cons_cmap, vmin=cons_min, vmax=cons_max)
+    ax2.set_yticks([0])
+    ax2.set_yticklabels([metric_labels["avg_consistency"]])
+    ax2.set_xticks(range(len(dims)))
+    ax2.set_xticklabels(dims, rotation=30, ha="right")
+    cbar2 = fig.colorbar(im2, ax=ax2, fraction=0.046, pad=0.04)
+    cbar2.set_label("Consistency")
+
     out_path = out_path_prefix
     if os.path.isdir(out_path_prefix):
         out_path = os.path.join(out_path_prefix, "global_heatmap.png")

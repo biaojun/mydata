@@ -116,7 +116,7 @@ def run_pipeline(
 
 
 def main() -> int:
-    input_jsonl = os.environ.get("INPUT_JSONL", "data/tasks.jsonl")
+    input_jsonl = os.environ.get("INPUT_JSONL", "/home/liangjunbiao/data/processed_data.jsonl")
     output_dir = os.environ.get("OUTPUT_DIR", "outputs")
     from openai import OpenAI
 

@@ -313,7 +313,15 @@ def plot_global_heatmaps(agg_dimension_csv: str, out_path_prefix: str) -> str:
     cons_max = max(cons_vals) if cons_vals else 1.0
     if cons_min == cons_max:
         cons_min, cons_max = 0.0, max(1.0, cons_max)
-    cons_cmap = "Greens"
+    # 调整灰色为更深的灰色以提高可见性
+    cons_cmap = mcolors.LinearSegmentedColormap.from_list("CustomGray", ["#d9d9d9", "#4d4d4"])
+
+    # 设置中文字体
+    font_path = _pick_font_path()
+    if font_path:
+        from matplotlib import rcParams
+        rcParams["font.sans-serif"] = font_path
+        rcParams["axes.unicode_minus"] = False
 
     # 画两块子图
     # 提升可读性：更大画布 + 约束布局，避免标签被遮挡

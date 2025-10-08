@@ -58,8 +58,8 @@ def plot_task_dimension_lollipop(task_json_path: str, out_path: str) -> str:
     plt.scatter(maxs, y, label="max", color="#ff7f0e", zorder=5)
 
     plt.yticks(y, dims, fontsize=9)
-    plt.xlabel("delta")
-    plt.title("任务级维度差（min/median/mean/max）")
+    plt.xlabel("Score Delta (Good - Bad)")
+    plt.title("Code Quality Gap Analysis: Good vs Bad Code")
     plt.grid(axis="x", linestyle=":", alpha=0.5)
     plt.legend(loc="lower right")
     os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
@@ -111,8 +111,8 @@ def plot_task_keywords_bar(task_json_path: str, out_path: str) -> str:
     y = list(range(len(items)))
     plt.barh(y, weights, color="#1f77b4")
     plt.yticks(y, phrases, fontsize=8)
-    plt.xlabel("权重")
-    plt.title("任务级区分性关键词（Top-20）")
+    plt.xlabel("Weight")
+    plt.title("Key Differences: Good vs Bad Code (Top-20)")
     plt.gca().invert_yaxis()
     plt.grid(axis="x", linestyle=":", alpha=0.5)
     import os as _os
@@ -158,7 +158,7 @@ def plot_global_radar(agg_dimension_csv: str, out_path: str) -> str:
     ax.plot(angles, data, linewidth=2, color="#1f77b4")
     ax.fill(angles, data, color="#1f77b4", alpha=0.25)
     ax.set_thetagrids([a * 180 / math.pi for a in angles[:-1]], dims)
-    ax.set_title("九维全局区分度（mean of mean_delta）")
+    ax.set_title("Overall Quality Gap: Good vs Bad Code (9 Dimensions)")
     ax.grid(True, linestyle=":", alpha=0.5)
     os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
     plt.tight_layout()
@@ -207,10 +207,10 @@ def plot_global_heatmaps(agg_dimension_csv: str, out_path_prefix: str) -> str:
 
     plt.figure(figsize=(12, 4.8))
     im = plt.imshow(mat, aspect="auto", cmap="YlOrRd")
-    plt.colorbar(im, fraction=0.046, pad=0.04, label="值")
+    plt.colorbar(im, fraction=0.046, pad=0.04, label="Value")
     plt.yticks(range(len(metrics)), metrics)
     plt.xticks(range(len(dims)), dims, rotation=30, ha="right")
-    plt.title("跨任务维度统计热力图")
+    plt.title("Quality Gap Statistics Across Multiple Tasks")
     out_path = out_path_prefix
     if os.path.isdir(out_path_prefix):
         out_path = os.path.join(out_path_prefix, "global_heatmap.png")
@@ -272,7 +272,7 @@ def plot_task_wordcloud(task_json_path: str, out_path: str, *, font_path: str | 
 
     if not freqs:
         # 构造一个占位，避免报错
-        freqs = {"无关键词": 1.0}
+        freqs = {"No Keywords": 1.0}
 
     fp = _pick_font_path(font_path)
     wc = WordCloud(
@@ -323,7 +323,7 @@ def plot_global_wordcloud(agg_keywords_csv: str, out_path: str, *, font_path: st
         freqs[phrase] = freqs.get(phrase, 0.0) + max(0.0, w)
 
     if not freqs:
-        freqs = {"无关键词": 1.0}
+        freqs = {"No Keywords": 1.0}
 
     fp = _pick_font_path(font_path)
     wc = WordCloud(

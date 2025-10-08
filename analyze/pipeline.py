@@ -29,13 +29,13 @@ from .report import build_report_markdown
 def run_pipeline(
     input_jsonl: str = "data/tasks.jsonl",
     output_dir: str = "outputs",
-    model: str = "vllm",
+    client = None
 ) -> dict:
     # 1) 读取任务
     tasks = read_tasks_jsonl(input_jsonl)
 
     # 2) 调用 LLM 分析每任务
-    results = analyze_tasks(tasks, model=model)
+    results = analyze_tasks(tasks, model=client)
 
     # 3) 写 per_task.jsonl
     ensure_dir(output_dir)
@@ -81,8 +81,16 @@ def main() -> int:
     input_jsonl = os.environ.get("INPUT_JSONL", "data/tasks.jsonl")
     output_dir = os.environ.get("OUTPUT_DIR", "outputs")
     model = os.environ.get("MODEL", "vllm")
+    from openai import OpenAI
 
-    paths = run_pipeline(input_jsonl=input_jsonl, output_dir=output_dir, model=model)
+    client = OpenAI(
+        base_url="http://localhost:8000/v1",
+        api_key="EMPTY"  # vLLM默认不验证
+    )
+
+
+
+    paths = run_pipeline(input_jsonl=input_jsonl, output_dir=output_dir, model=client)
     for k, v in paths.items():
         print(f"{k}: {v}")
     return 0

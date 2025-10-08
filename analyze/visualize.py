@@ -23,6 +23,8 @@ def plot_task_dimension_lollipop(task_json_path: str, out_path: str) -> str:
 
     try:
         import matplotlib.pyplot as plt
+        from matplotlib import font_manager as _fm
+        import os as _os
     except Exception as e:
         raise ImportError("需要 matplotlib，安装：pip install matplotlib") from e
 
@@ -37,7 +39,33 @@ def plot_task_dimension_lollipop(task_json_path: str, out_path: str) -> str:
             line = content.splitlines()[0]
             obj = json.loads(line)
 
+    # 字体设置（使用 FONT_PATH 或常见中文字体），并修正负号
+    try:
+        _font_path_env = _os.environ.get("FONT_PATH")
+        _fp_path = _font_path_env or _pick_font_path(None)
+        if _fp_path:
+            try:
+                _fm.fontManager.addfont(_fp_path)
+            except Exception:
+                pass
+            _fp = _fm.FontProperties(fname=_fp_path)
+            plt.rcParams["font.family"] = _fp.get_name()
+        plt.rcParams["axes.unicode_minus"] = False
+    except Exception:
+        pass
+
     dims = [d.value for d in Dimension]
+    dim_cn = {
+        "correctness": "正确性",
+        "robustness": "鲁棒性",
+        "readability": "可读性",
+        "maintainability": "可维护性",
+        "complexity": "复杂度",
+        "performance": "性能",
+        "testing": "测试",
+        "security_dependency": "安全/依赖",
+        "style_consistency": "风格一致",
+    }
     per_dim_values = {d: [] for d in dims}
     for cmp in obj.get("per_bad_comparisons") or []:
         dim_scores = (cmp.get("dimension_scores") or {})
@@ -79,7 +107,7 @@ def plot_task_dimension_lollipop(task_json_path: str, out_path: str) -> str:
 
     y = list(range(len(dims)))
 
-    plt.figure(figsize=(10, 6))
+    plt.figure(figsize=(11, 6.5))
     # 误差线（min-max）
     for i, (mn, mx) in enumerate(zip(mins, maxs)):
         plt.plot([mn, mx], [i, i], color="#888", linewidth=2, zorder=1)
@@ -89,11 +117,11 @@ def plot_task_dimension_lollipop(task_json_path: str, out_path: str) -> str:
     plt.scatter(means, y, label="mean", color="#2ca02c", zorder=4)
     plt.scatter(maxs, y, label="max", color="#ff7f0e", zorder=5)
 
-    plt.yticks(y, dims, fontsize=9)
-    plt.xlabel("Score Delta (Good - Bad)")
-    plt.title("Code Quality Gap Analysis: Good vs Bad Code")
+    plt.yticks(y, [dim_cn.get(d, d) for d in dims], fontsize=12)
+    plt.xlabel("差值 (好 - 坏)", fontsize=12)
+    plt.title("任务维度差距（min/median/mean/max）", fontsize=14)
     plt.grid(axis="x", linestyle=":", alpha=0.5)
-    plt.legend(loc="lower right")
+    plt.legend(loc="lower right", fontsize=11)
     os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
     plt.tight_layout()
     plt.savefig(out_path, dpi=150)
@@ -111,6 +139,8 @@ def plot_task_keywords_bar(task_json_path: str, out_path: str) -> str:
 
     try:
         import matplotlib.pyplot as plt
+        from matplotlib import font_manager as _fm
+        import os as _os
     except Exception as e:
         raise ImportError("需要 matplotlib，安装：pip install matplotlib") from e
 
@@ -149,12 +179,27 @@ def plot_task_keywords_bar(task_json_path: str, out_path: str) -> str:
     phrases = [f"{it['phrase']} ({it['dimension']})" for it in items]
     weights = [it["weight"] for it in items]
 
-    plt.figure(figsize=(10, max(4, len(items) * 0.4)))
+    # 字体设置
+    try:
+        _font_path_env = _os.environ.get("FONT_PATH")
+        _fp_path = _font_path_env or _pick_font_path(None)
+        if _fp_path:
+            try:
+                _fm.fontManager.addfont(_fp_path)
+            except Exception:
+                pass
+            _fp = _fm.FontProperties(fname=_fp_path)
+            plt.rcParams["font.family"] = _fp.get_name()
+        plt.rcParams["axes.unicode_minus"] = False
+    except Exception:
+        pass
+
+    plt.figure(figsize=(11, max(4, len(items) * 0.5)))
     y = list(range(len(items)))
     plt.barh(y, weights, color="#1f77b4")
-    plt.yticks(y, phrases, fontsize=8)
-    plt.xlabel("Weight")
-    plt.title("Key Differences: Good vs Bad Code (Top-20)")
+    plt.yticks(y, phrases, fontsize=11)
+    plt.xlabel("权重", fontsize=12)
+    plt.title("区分性关键词（Top-20）", fontsize=14)
     plt.gca().invert_yaxis()
     plt.grid(axis="x", linestyle=":", alpha=0.5)
     import os as _os
@@ -174,6 +219,8 @@ def plot_global_radar(agg_dimension_csv: str, out_path: str) -> str:
 
     try:
         import matplotlib.pyplot as plt
+        from matplotlib import font_manager as _fm
+        import os as _os
     except Exception as e:
         raise ImportError("需要 matplotlib，安装：pip install matplotlib") from e
 
@@ -198,11 +245,26 @@ def plot_global_radar(agg_dimension_csv: str, out_path: str) -> str:
     angles = [n / float(len(dims)) * 2 * math.pi for n in range(len(dims))]
     angles += [angles[0]]
 
-    plt.figure(figsize=(8, 8))
+    # 字体设置
+    try:
+        _font_path_env = _os.environ.get("FONT_PATH")
+        _fp_path = _font_path_env or _pick_font_path(None)
+        if _fp_path:
+            try:
+                _fm.fontManager.addfont(_fp_path)
+            except Exception:
+                pass
+            _fp = _fm.FontProperties(fname=_fp_path)
+            plt.rcParams["font.family"] = _fp.get_name()
+        plt.rcParams["axes.unicode_minus"] = False
+    except Exception:
+        pass
+
+    plt.figure(figsize=(8.6, 8.6))
     ax = plt.subplot(111, polar=True)
-    ax.plot(angles, good_data, linewidth=2, color="#2ca02c", label="Good code")
+    ax.plot(angles, good_data, linewidth=2, color="#2ca02c", label="好代码")
     ax.fill(angles, good_data, color="#2ca02c", alpha=0.20)
-    ax.plot(angles, bad_data, linewidth=2, color="#d62728", label="Bad code")
+    ax.plot(angles, bad_data, linewidth=2, color="#d62728", label="坏代码")
     ax.fill(angles, bad_data, color="#d62728", alpha=0.12)
 
     # 在两条曲线之间添加“差异阴影”（纯 Python 计算上下边界）
@@ -217,10 +279,22 @@ def plot_global_radar(agg_dimension_csv: str, out_path: str) -> str:
         label="Gap (|Good - Bad|)"
     )
     ax.set_ylim(0, 5)
-    ax.set_thetagrids([a * 180 / math.pi for a in angles[:-1]], dims)
-    ax.set_title("Average Scores by Dimension: Good vs Bad Code")
+    # 中文维度标签
+    dim_cn = {
+        "correctness": "正确性",
+        "robustness": "鲁棒性",
+        "readability": "可读性",
+        "maintainability": "可维护性",
+        "complexity": "复杂度",
+        "performance": "性能",
+        "testing": "测试",
+        "security_dependency": "安全/依赖",
+        "style_consistency": "风格一致",
+    }
+    ax.set_thetagrids([a * 180 / math.pi for a in angles[:-1]], [dim_cn.get(d, d) for d in dims], fontsize=12)
+    ax.set_title("九维均分对比：好代码 vs 坏代码", fontsize=14)
     ax.grid(True, linestyle=":", alpha=0.5)
-    ax.legend(loc="upper right", bbox_to_anchor=(1.2, 1.1))
+    ax.legend(loc="upper right", bbox_to_anchor=(1.2, 1.1), fontsize=11)
     os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
     plt.tight_layout()
     plt.savefig(out_path, dpi=150)
@@ -349,26 +423,26 @@ def plot_global_heatmaps(agg_dimension_csv: str, out_path_prefix: str) -> str:
     ax1 = fig.add_subplot(gs[0])
     im1 = ax1.imshow(delta_mat, aspect="auto", cmap=_delta_cmap, norm=delta_norm)
     ax1.set_yticks(range(len(delta_rows_idx)))
-    ax1.set_yticklabels([metric_labels[metrics_all[i]] for i in delta_rows_idx], fontsize=10)
+    ax1.set_yticklabels([metric_labels[metrics_all[i]] for i in delta_rows_idx], fontsize=12)
     ax1.set_xticks(range(len(dims)))
     # 仅在下图显示 X 轴标签，避免拥挤
     ax1.set_xticklabels([])
-    ax1.set_title("Quality Gap (Delta: Good - Bad)", pad=6)
+    ax1.set_title("质量差距（Δ=好-坏）", pad=6, fontsize=14)
     cbar1 = fig.colorbar(im1, ax=ax1, fraction=0.046, pad=0.04)
-    cbar1.set_label("Delta (Good - Bad)")
+    cbar1.set_label("差值 Δ (好-坏)", fontsize=12)
 
     # 下：一致性
     ax2 = fig.add_subplot(gs[1], sharex=ax1)
     im2 = ax2.imshow(cons_mat, aspect="auto", cmap=cons_cmap, vmin=cons_min, vmax=cons_max)
     ax2.set_yticks([0])
-    ax2.set_yticklabels([metric_labels["avg_consistency"]], fontsize=10)
+    ax2.set_yticklabels([metric_labels["avg_consistency"]], fontsize=12)
     ax2.set_xticks(range(len(dims)))
-    ax2.set_xticklabels([dim_cn.get(d, d) for d in dims], rotation=35, ha="right", fontsize=9)
+    ax2.set_xticklabels([dim_cn.get(d, d) for d in dims], rotation=30, ha="right", fontsize=12)
     # 为避免最右侧标签被裁切，适当留白
     for label in ax2.get_xticklabels():
         label.set_horizontalalignment("right")
     cbar2 = fig.colorbar(im2, ax=ax2, fraction=0.046, pad=0.04)
-    cbar2.set_label("Consistency")
+    cbar2.set_label("一致性", fontsize=12)
 
     out_path = out_path_prefix
     if os.path.isdir(out_path_prefix):

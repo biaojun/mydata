@@ -36,7 +36,7 @@ def build_1vN_prompt(task: TaskInput) -> str:
 你的目标是：
 
 1. 对 good_code vs 每个 bad_code 逐一比较，覆盖以下 9 个维度（0–5 分）：correctness、robustness、readability、maintainability、complexity、performance、testing、security_dependency、style_consistency。对每维给出（good、bad、evidence）。
-  评分标准（范围为 0–5；以下为 1–5 的简要口径，0 表示“未体现/无法评估”）：
+  评分标准（范围为 0–5；以下为 1–5 的简要口径，0 表示“未体现/无法评估”），5分是完美代码，所以尽量不要打满分：
   - 5 分：优秀/行业最佳实践，设计与实现全面到位，几乎无改进空间；
   - 4 分：良好/大体规范，偶有可改进点但不影响整体质量；
   - 3 分：一般/可接受，存在明显改进空间；

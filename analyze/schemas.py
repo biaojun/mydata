@@ -82,7 +82,7 @@ class ModelOutput:
     task_id: str
     prompt_brief: str
     per_bad_comparisons: List[PerBadComparison] = field(default_factory=list)
-    task_level_agg: TaskLevelAggregation = field(default_factory=TaskLevelAggregation)
+    task_level_agg: Optional[TaskLevelAggregation] = None
 
 
 # Lightweight helpers for later (placeholders, to be implemented as needed)

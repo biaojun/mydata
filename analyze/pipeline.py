@@ -22,7 +22,7 @@ from typing import List
 from .io_utils import read_tasks_jsonl, write_jsonl, ensure_dir
 from .per_task import analyze_tasks
 from .aggregate import export_aggregates
-from .visualize import plot_global_radar, plot_global_heatmaps, plot_global_wordcloud
+from .visualize import plot_global_radar, plot_global_heatmaps, plot_pattern_wordcloud
 from .report import build_report_markdown
 
 
@@ -80,9 +80,11 @@ def run_pipeline(
     print("\n📊 [步骤 4/6] 聚合统计数据...")
     dim_csv = os.path.join(output_dir, "agg_dimension.csv")
     kw_csv = os.path.join(output_dir, "agg_keywords.csv")
-    export_aggregates(per_task_path, dim_csv, kw_csv)
+    dim_csv, kw_csv, pos_patterns_csv, anti_patterns_csv = export_aggregates(per_task_path, dim_csv, kw_csv)
     print(f"   ✓ 维度统计: {dim_csv}")
     print(f"   ✓ 关键词统计: {kw_csv}")
+    print(f"   ✓ 好代码模式: {pos_patterns_csv}")
+    print(f"   ✓ 坏代码模式: {anti_patterns_csv}")
 
     # 5) 生成全局图表
     print("\n📈 [步骤 5/6] 生成可视化图表...")
@@ -98,18 +100,24 @@ def run_pipeline(
     
     # 读取 FONT_PATH 环境变量以支持中文字体
     font_path = os.environ.get("FONT_PATH")
+    positive_wc_path = ""
+    anti_wc_path = ""
     try:
-        wordcloud_path = os.path.join(figs_dir, "global_wordcloud.png")
-        plot_global_wordcloud(kw_csv, wordcloud_path, font_path=font_path)
-        print(f"   ✓ 词云图: {wordcloud_path}")
+        positive_wc_path = os.path.join(figs_dir, "global_positive_patterns_wordcloud.png")
+        plot_pattern_wordcloud(pos_patterns_csv, positive_wc_path, font_path=font_path)
+        print(f"   ✓ 正向模式词云: {positive_wc_path}")
+
+        anti_wc_path = os.path.join(figs_dir, "global_anti_patterns_wordcloud.png")
+        plot_pattern_wordcloud(anti_patterns_csv, anti_wc_path, font_path=font_path)
+        print(f"   ✓ 反向模式词云: {anti_wc_path}")
     except ImportError as e:
         print(f"   ⚠ 跳过词云生成: 缺少依赖库 wordcloud")
         print(f"     安装命令: pip install wordcloud pillow")
-        wordcloud_path = ""
+        positive_wc_path = anti_wc_path = ""
     except Exception as e:
         print(f"   ⚠ 跳过词云生成: {e}")
         print(f"     提示: 如果是字体错误，可忽略或设置 FONT_PATH 环境变量")
-        wordcloud_path = ""
+        positive_wc_path = anti_wc_path = ""
 
     # 6) 生成报告
     print("\n📝 [步骤 6/6] 生成分析报告...")
@@ -125,10 +133,13 @@ def run_pipeline(
         "per_task": per_task_path,
         "agg_dimension": dim_csv,
         "agg_keywords": kw_csv,
+        "agg_positive_patterns": pos_patterns_csv,
+        "agg_anti_patterns": anti_patterns_csv,
         "radar": radar_path,
         "heatmap": heatmap_path,
         "report": report_md,
-        "wordcloud": wordcloud_path,
+        "wordcloud_positive_patterns": positive_wc_path,
+        "wordcloud_anti_patterns": anti_wc_path,
     }
 
 

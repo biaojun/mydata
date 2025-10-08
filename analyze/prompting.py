@@ -37,13 +37,12 @@ def build_1vN_prompt(task: TaskInput) -> str:
 
 1. 对 good_code vs 每个 bad_code 逐一比较，覆盖以下 9 个维度（0–5 分）：correctness、robustness、readability、maintainability、complexity、performance、testing、security_dependency、style_consistency。对每维给出（good、bad、delta、evidence）。当 |delta|≥2 必须给关键证据。
 2. 针对每个 bad，抽取区分性的关键词（phrase、dimension、weight），并总结 2–5 条 positive_patterns 与 2–5 条 anti_patterns，给出 2–5 条 actionable_rules_local。
-3. 请在同一次输出中完成任务级聚合：对 9 维计算 mean_delta、median_delta、min_delta、max_delta、consistency(阈值 τ=2)；合并关键词权重（按 delta 强度加权）；合并并去重 positive/anti patterns，输出最终的 task_actionable_rules（5–10 条）。
+3. 不要做任何任务级聚合统计；仅返回逐个 bad 的详细比较结果，让后续程序自行汇总。
 4. 仅输出严格符合 JSON Schema 的结构化结果，不要额外文本。
 
 输入：
 {{
   "task_id": "{task.task_id}",
-  "language": "{task.language}",
   "prompt": "{prompt_text}",
   "good_code": "{good_text}",
   "bad_codes": {bads}
@@ -73,23 +72,7 @@ def build_1vN_prompt(task: TaskInput) -> str:
       "actionable_rules_local": ["..."]
     }}
   ],
-  "task_level_agg": {{
-    "dimension_agg": {{
-      "correctness": {{"mean_delta": 0.0, "median_delta": 0.0, "min_delta": 0.0, "max_delta": 0.0, "consistency": 0.0}},
-      "robustness":  {{"mean_delta": 0.0, "median_delta": 0.0, "min_delta": 0.0, "max_delta": 0.0, "consistency": 0.0}},
-      "readability": {{"mean_delta": 0.0, "median_delta": 0.0, "min_delta": 0.0, "max_delta": 0.0, "consistency": 0.0}},
-      "maintainability": {{"mean_delta": 0.0, "median_delta": 0.0, "min_delta": 0.0, "max_delta": 0.0, "consistency": 0.0}},
-      "complexity": {{"mean_delta": 0.0, "median_delta": 0.0, "min_delta": 0.0, "max_delta": 0.0, "consistency": 0.0}},
-      "performance": {{"mean_delta": 0.0, "median_delta": 0.0, "min_delta": 0.0, "max_delta": 0.0, "consistency": 0.0}},
-      "testing": {{"mean_delta": 0.0, "median_delta": 0.0, "min_delta": 0.0, "max_delta": 0.0, "consistency": 0.0}},
-      "security_dependency": {{"mean_delta": 0.0, "median_delta": 0.0, "min_delta": 0.0, "max_delta": 0.0, "consistency": 0.0}},
-      "style_consistency": {{"mean_delta": 0.0, "median_delta": 0.0, "min_delta": 0.0, "max_delta": 0.0, "consistency": 0.0}}
-    }},
-    "top_positive_patterns": ["..."],
-    "top_anti_patterns": ["..."],
-    "aggregated_keywords": [{{"phrase": "...", "weight": 0.0, "dimension": "..."}}],
-    "task_actionable_rules": ["..."]
-  }}
+  "task_level_agg": null  // 保持字段占位即可，后续程序会忽略
 }}
 """
     return instruction.strip()

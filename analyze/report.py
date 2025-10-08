@@ -68,9 +68,15 @@ def build_report_markdown(agg_dimension_csv: str, agg_keywords_csv: str, figs_di
     # 插入全局图表（若存在）
     radar = os.path.join(figs_dir, "global_radar.png")
     heatmap = os.path.join(figs_dir, "global_heatmap.png")
-    wc = os.path.join(figs_dir, "global_wordcloud.png")
+    wc_positive = os.path.join(figs_dir, "global_positive_patterns_wordcloud.png")
+    wc_anti = os.path.join(figs_dir, "global_anti_patterns_wordcloud.png")
     base_dir = os.path.dirname(out_md_path) or "."
-    if os.path.exists(radar) or os.path.exists(heatmap) or os.path.exists(wc):
+    if (
+        os.path.exists(radar)
+        or os.path.exists(heatmap)
+        or os.path.exists(wc_positive)
+        or os.path.exists(wc_anti)
+    ):
         md.append("## 全局图表\n")
     if os.path.exists(radar):
         rel = os.path.relpath(radar, base_dir)
@@ -78,9 +84,12 @@ def build_report_markdown(agg_dimension_csv: str, agg_keywords_csv: str, figs_di
     if os.path.exists(heatmap):
         rel = os.path.relpath(heatmap, base_dir)
         md.append(f"![global_heatmap]({rel})\n")
-    if os.path.exists(wc):
-        rel = os.path.relpath(wc, base_dir)
-        md.append(f"![global_wordcloud]({rel})\n")
+    if os.path.exists(wc_positive):
+        rel = os.path.relpath(wc_positive, base_dir)
+        md.append(f"![global_positive_patterns_wordcloud]({rel})\n")
+    if os.path.exists(wc_anti):
+        rel = os.path.relpath(wc_anti, base_dir)
+        md.append(f"![global_anti_patterns_wordcloud]({rel})\n")
 
     with open(out_md_path, "w", encoding="utf-8") as f:
         f.write("\n".join(md))

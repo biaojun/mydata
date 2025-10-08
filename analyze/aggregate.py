@@ -14,7 +14,7 @@ import csv
 import json
 import os
 
-from .schemas import ModelOutput, Dimension
+from .schemas import Dimension
 from .io_utils import ensure_dir
 
 
@@ -49,21 +49,41 @@ def aggregate_dimension_stats(per_task: Iterable[dict]) -> List[dict]:
     }
 
     for item in per_task:
-        dim_agg = (item.get("task_level_agg") or {}).get("dimension_agg") or {}
-        for d in Dimension:
-            name = d.value
-            stats = dim_agg.get(name)
-            if not stats:
+        per_bad = item.get("per_bad_comparisons") or []
+        # 先为每个维度收集当前任务的 delta 列表
+        per_dim_deltas: Dict[str, List[float]] = {d.value: [] for d in Dimension}
+        for cmp in per_bad:
+            dim_scores = (cmp.get("dimension_scores") or {})
+            for d in Dimension:
+                name = d.value
+                detail = dim_scores.get(name)
+                if not detail:
+                    continue
+                try:
+                    delta_val = float(detail.get("delta", 0.0))
+                    per_dim_deltas[name].append(delta_val)
+                except Exception:
+                    continue
+
+        for name, deltas in per_dim_deltas.items():
+            if not deltas:
                 continue
-            try:
-                acc[name]["mean_delta"].append(float(stats.get("mean_delta", 0.0)))
-                acc[name]["median_delta"].append(float(stats.get("median_delta", 0.0)))
-                acc[name]["min_delta"].append(float(stats.get("min_delta", 0.0)))
-                acc[name]["max_delta"].append(float(stats.get("max_delta", 0.0)))
-                acc[name]["consistency"].append(float(stats.get("consistency", 0.0)))
-            except Exception:
-                # 跳过异常数据
-                continue
+            deltas_sorted = sorted(deltas)
+            n = len(deltas_sorted)
+            mean_delta = sum(deltas_sorted) / n
+            if n % 2 == 1:
+                median_delta = deltas_sorted[n // 2]
+            else:
+                median_delta = (deltas_sorted[n // 2 - 1] + deltas_sorted[n // 2]) / 2.0
+            min_delta = deltas_sorted[0]
+            max_delta = deltas_sorted[-1]
+            consistency = sum(1 for v in deltas_sorted if abs(v) >= 2.0) / n
+
+            acc[name]["mean_delta"].append(round(mean_delta, 6))
+            acc[name]["median_delta"].append(round(median_delta, 6))
+            acc[name]["min_delta"].append(round(min_delta, 6))
+            acc[name]["max_delta"].append(round(max_delta, 6))
+            acc[name]["consistency"].append(round(consistency, 6))
 
         # 额外：统计原始 good/bad 分数用于雷达图
         per_bad = item.get("per_bad_comparisons") or []
@@ -122,17 +142,23 @@ def aggregate_keywords(per_task: Iterable[dict]) -> List[dict]:
 
     for item in per_task:
         task_id = item.get("task_id", "")
-        kws = (item.get("task_level_agg") or {}).get("aggregated_keywords") or []
-        for kw in kws:
-            phrase = str(kw.get("phrase", "")).strip()
-            dim = str(kw.get("dimension", ""))
-            # 若维度是以 Enum/value 表示，统一为字符串
-            if hasattr(dim, "value"):
-                dim = str(dim.value)
-            key = (phrase, dim)
-            w = float(kw.get("weight", 0.0))
-            kw_weight[key] = kw_weight.get(key, 0.0) + w
-            kw_tasks.setdefault(key, set()).add(task_id)
+        per_bad = item.get("per_bad_comparisons") or []
+        for cmp in per_bad:
+            kws = cmp.get("discriminative_keywords") or []
+            for kw in kws:
+                phrase = str(kw.get("phrase", "")).strip()
+                dim = str(kw.get("dimension", ""))
+                if hasattr(dim, "value"):
+                    dim = str(dim.value)
+                if not phrase:
+                    continue
+                try:
+                    w = float(kw.get("weight", kw.get("weight_sum", 0.0)) or 0.0)
+                except Exception:
+                    continue
+                key = (phrase, dim)
+                kw_weight[key] = kw_weight.get(key, 0.0) + w
+                kw_tasks.setdefault(key, set()).add(task_id)
 
     rows: List[dict] = []
     for (phrase, dim), wsum in kw_weight.items():
@@ -149,7 +175,47 @@ def aggregate_keywords(per_task: Iterable[dict]) -> List[dict]:
     return rows
 
 
-def export_aggregates(per_task_path: str, out_dimension_csv: str, out_keywords_csv: str) -> Tuple[str, str]:
+def aggregate_patterns(per_task: Iterable[dict]) -> Tuple[List[dict], List[dict]]:
+    """聚合正向与反向模式，并统计出现频次。"""
+
+    items = list(per_task)
+
+    def _collect_from_per_bad(key: str):
+        counts: Dict[str, float] = {}
+        tasks: Dict[str, set] = {}
+        for item in items:
+            task_id = item.get("task_id", "")
+            per_bad = item.get("per_bad_comparisons") or []
+            seen_in_task = set()
+            for cmp in per_bad:
+                patterns = cmp.get(key) or []
+                for pat in patterns:
+                    phrase = str(pat).strip()
+                    if not phrase:
+                        continue
+                    counts[phrase] = counts.get(phrase, 0.0) + 1.0
+                    seen_in_task.add(phrase)
+            for phrase in seen_in_task:
+                tasks.setdefault(phrase, set()).add(task_id)
+
+        rows = []
+        for phrase, cnt in counts.items():
+            rows.append(
+                {
+                    "pattern": phrase,
+                    "count": int(cnt),
+                    "task_count": len(tasks.get(phrase, set())),
+                }
+            )
+        rows.sort(key=lambda r: (-r["count"], r["pattern"]))
+        return rows
+
+    positives = _collect_from_per_bad("positive_patterns")
+    antis = _collect_from_per_bad("anti_patterns")
+    return positives, antis
+
+
+def export_aggregates(per_task_path: str, out_dimension_csv: str, out_keywords_csv: str) -> Tuple[str, str, str, str]:
     """读取 per_task JSONL 并导出跨任务 CSV 聚合结果。
 
     返回写入的文件路径。
@@ -158,9 +224,12 @@ def export_aggregates(per_task_path: str, out_dimension_csv: str, out_keywords_c
 
     dim_rows = aggregate_dimension_stats(items)
     kw_rows = aggregate_keywords(items)
+    pos_rows, anti_rows = aggregate_patterns(items)
 
     ensure_dir(os.path.dirname(out_dimension_csv) or ".")
     ensure_dir(os.path.dirname(out_keywords_csv) or ".")
+    pos_patterns_csv = os.path.join(os.path.dirname(out_dimension_csv) or ".", "agg_positive_patterns.csv")
+    anti_patterns_csv = os.path.join(os.path.dirname(out_dimension_csv) or ".", "agg_anti_patterns.csv")
 
     with open(out_dimension_csv, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(
@@ -188,4 +257,20 @@ def export_aggregates(per_task_path: str, out_dimension_csv: str, out_keywords_c
         writer.writeheader()
         writer.writerows(kw_rows)
 
-    return out_dimension_csv, out_keywords_csv
+    with open(pos_patterns_csv, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(
+            f,
+            fieldnames=["pattern", "count", "task_count"],
+        )
+        writer.writeheader()
+        writer.writerows(pos_rows)
+
+    with open(anti_patterns_csv, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(
+            f,
+            fieldnames=["pattern", "count", "task_count"],
+        )
+        writer.writeheader()
+        writer.writerows(anti_rows)
+
+    return out_dimension_csv, out_keywords_csv, pos_patterns_csv, anti_patterns_csv

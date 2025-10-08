@@ -75,7 +75,7 @@ from .visualize import (
     plot_task_wordcloud,
     plot_global_radar,
     plot_global_heatmaps,
-    plot_global_wordcloud,
+    plot_pattern_wordcloud,
 )
 
 # 报告生成
@@ -144,7 +144,7 @@ __all__ = [
     "plot_task_wordcloud",
     "plot_global_radar",
     "plot_global_heatmaps",
-    "plot_global_wordcloud",
+    "plot_pattern_wordcloud",
     
     # 报告生成
     "build_report_markdown",

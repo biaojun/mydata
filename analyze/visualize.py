@@ -37,13 +37,41 @@ def plot_task_dimension_lollipop(task_json_path: str, out_path: str) -> str:
             line = content.splitlines()[0]
             obj = json.loads(line)
 
-    dim_agg = (obj.get("task_level_agg") or {}).get("dimension_agg") or {}
     dims = [d.value for d in Dimension]
+    per_dim_values = {d: [] for d in dims}
+    for cmp in obj.get("per_bad_comparisons") or []:
+        dim_scores = (cmp.get("dimension_scores") or {})
+        for d in dims:
+            detail = dim_scores.get(d)
+            if not detail:
+                continue
+            try:
+                per_dim_values[d].append(float(detail.get("delta", 0.0)))
+            except Exception:
+                continue
 
-    means = [float((dim_agg.get(d) or {}).get("mean_delta", 0.0)) for d in dims]
-    meds = [float((dim_agg.get(d) or {}).get("median_delta", 0.0)) for d in dims]
-    mins = [float((dim_agg.get(d) or {}).get("min_delta", 0.0)) for d in dims]
-    maxs = [float((dim_agg.get(d) or {}).get("max_delta", 0.0)) for d in dims]
+    def _stats(vals):
+        if not vals:
+            return 0.0, 0.0, 0.0, 0.0
+        xs = sorted(vals)
+        n = len(xs)
+        mean_val = sum(xs) / n
+        if n % 2 == 1:
+            median_val = xs[n // 2]
+        else:
+            median_val = (xs[n // 2 - 1] + xs[n // 2]) / 2.0
+        return mean_val, median_val, xs[0], xs[-1]
+
+    means = []
+    meds = []
+    mins = []
+    maxs = []
+    for d in dims:
+        mean_val, median_val, min_val, max_val = _stats(per_dim_values[d])
+        means.append(mean_val)
+        meds.append(median_val)
+        mins.append(min_val)
+        maxs.append(max_val)
 
     y = list(range(len(dims)))
 
@@ -72,7 +100,7 @@ def plot_task_dimension_lollipop(task_json_path: str, out_path: str) -> str:
 def plot_task_keywords_bar(task_json_path: str, out_path: str) -> str:
     """绘制任务级 Top-K 区分性关键词条形图。
 
-    默认取 Top-20（按权重和排序）。
+    默认取 Top-20（按 per_bad discriminative_keywords 累积权重排序）。
     """
     import json
     import os
@@ -91,15 +119,25 @@ def plot_task_keywords_bar(task_json_path: str, out_path: str) -> str:
             line = content.splitlines()[0]
             obj = json.loads(line)
 
-    kws = (obj.get("task_level_agg") or {}).get("aggregated_keywords") or []
-    # 规范字段名（可能是对象列表或已为 dict）
+    kw_totals = {}
+    for cmp in obj.get("per_bad_comparisons") or []:
+        for kw in cmp.get("discriminative_keywords") or []:
+            phrase = str(kw.get("phrase", ""))
+            dim = str(kw.get("dimension", ""))
+            if hasattr(dim, "value"):
+                dim = str(dim.value)
+            if not phrase:
+                continue
+            try:
+                weight = float(kw.get("weight", kw.get("weight_sum", 0.0)) or 0.0)
+            except Exception:
+                continue
+            key = (phrase, dim)
+            kw_totals[key] = kw_totals.get(key, 0.0) + weight
+
     items = [
-        {
-            "phrase": str(k.get("phrase", "")),
-            "weight": float(k.get("weight", k.get("weight_sum", 0.0))),
-            "dimension": str(k.get("dimension", "")),
-        }
-        for k in kws
+        {"phrase": phrase, "dimension": dim, "weight": weight}
+        for (phrase, dim), weight in kw_totals.items()
     ]
     items.sort(key=lambda r: r["weight"], reverse=True)
     items = items[:20]
@@ -259,7 +297,7 @@ def _pick_font_path(font_path: str | None = None) -> str | None:
 
 
 def plot_task_wordcloud(task_json_path: str, out_path: str, *, font_path: str | None = None, background_color: str = "white", max_words: int = 200) -> str:
-    """基于单任务 aggregated_keywords 绘制词云。"""
+    """基于单任务 per_bad discriminative_keywords 绘制词云。"""
     import json
     import os
 
@@ -276,14 +314,17 @@ def plot_task_wordcloud(task_json_path: str, out_path: str, *, font_path: str | 
         else:
             obj = json.loads(content.splitlines()[0])
 
-    kws = (obj.get("task_level_agg") or {}).get("aggregated_keywords") or []
     freqs = {}
-    for k in kws:
-        phrase = str(k.get("phrase", "")).strip()
-        if not phrase:
-            continue
-        w = float(k.get("weight", k.get("weight_sum", 0.0)) or 0.0)
-        freqs[phrase] = freqs.get(phrase, 0.0) + max(0.0, w)
+    for cmp in obj.get("per_bad_comparisons") or []:
+        for k in cmp.get("discriminative_keywords") or []:
+            phrase = str(k.get("phrase", "")).strip()
+            if not phrase:
+                continue
+            try:
+                w = float(k.get("weight", k.get("weight_sum", 0.0)) or 0.0)
+            except Exception:
+                continue
+            freqs[phrase] = freqs.get(phrase, 0.0) + max(0.0, w)
 
     if not freqs:
         # 构造一个占位，避免报错
@@ -314,8 +355,8 @@ def plot_task_wordcloud(task_json_path: str, out_path: str, *, font_path: str | 
     return out_path
 
 
-def plot_global_wordcloud(agg_keywords_csv: str, out_path: str, *, font_path: str | None = None, background_color: str = "white", top_k: int = 200) -> str:
-    """基于全局关键词 CSV 绘制词云（phrase -> weight_sum）。"""
+def plot_pattern_wordcloud(pattern_csv: str, out_path: str, *, font_path: str | None = None, background_color: str = "white", top_k: int = 200) -> str:
+    """基于正/反向模式 CSV 绘制词云（pattern -> count）。"""
     import csv
     import os
 
@@ -326,28 +367,26 @@ def plot_global_wordcloud(agg_keywords_csv: str, out_path: str, *, font_path: st
         raise ImportError("需要 wordcloud 和 matplotlib：pip install wordcloud pillow matplotlib") from e
 
     rows = []
-    with open(agg_keywords_csv, "r", encoding="utf-8") as f:
+    with open(pattern_csv, "r", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         for r in reader:
             rows.append(r)
 
-    rows.sort(key=lambda r: float(r.get("weight_sum", 0.0)), reverse=True)
+    rows.sort(key=lambda r: float(r.get("count", 0.0)), reverse=True)
     rows = rows[:top_k]
 
     freqs = {}
     for r in rows:
-        phrase = str(r.get("phrase", "")).strip()
+        phrase = str(r.get("pattern", "")).strip()
         if not phrase:
             continue
-        w = float(r.get("weight_sum", 0.0) or 0.0)
-        freqs[phrase] = freqs.get(phrase, 0.0) + max(0.0, w)
+        count = float(r.get("count", 0.0) or 0.0)
+        freqs[phrase] = freqs.get(phrase, 0.0) + max(0.0, count)
 
     if not freqs:
-        freqs = {"No Keywords": 1.0}
+        freqs = {"No Patterns": 1.0}
 
     fp = _pick_font_path(font_path)
-    
-    # 构建 WordCloud 参数，如果没有字体则不传 font_path（使用默认字体）
     wc_params = {
         "width": 1400,
         "height": 900,
@@ -355,9 +394,9 @@ def plot_global_wordcloud(agg_keywords_csv: str, out_path: str, *, font_path: st
         "prefer_horizontal": 0.9,
         "collocations": False,
     }
-    if fp:  # 只有找到字体文件时才设置
+    if fp:
         wc_params["font_path"] = fp
-    
+
     wc = WordCloud(**wc_params).generate_from_frequencies(freqs)
 
     os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)

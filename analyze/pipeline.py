@@ -30,7 +30,9 @@ def run_pipeline(
     input_jsonl: str = "data/tasks.jsonl",
     output_dir: str = "outputs",
     client = None,
-    show_progress: bool = True
+    show_progress: bool = True,
+    use_concurrent: bool = True,
+    max_workers: int = 4
 ) -> dict:
     """运行完整的 1vN 代码质量分析 Pipeline。
     
@@ -39,6 +41,8 @@ def run_pipeline(
         output_dir: 输出目录
         client: OpenAI client 实例
         show_progress: 是否显示进度条
+        use_concurrent: 是否使用并发处理（建议多实例时启用）
+        max_workers: 最大并发线程数（建议与 vLLM 实例数相同）
     
     Returns:
         包含各输出文件路径的字典
@@ -54,7 +58,15 @@ def run_pipeline(
 
     # 2) 调用 LLM 分析每任务
     print("\n🤖 [步骤 2/6] 调用 LLM 分析任务...")
-    results = analyze_tasks(tasks, model=client, show_progress=show_progress)
+    if use_concurrent:
+        print(f"   使用并发模式（{max_workers} 个线程）")
+    results = analyze_tasks(
+        tasks, 
+        model=client, 
+        show_progress=show_progress,
+        use_concurrent=use_concurrent,
+        max_workers=max_workers
+    )
     print(f"   ✓ 成功分析 {len(results)} 个任务")
 
     # 3) 写 per_task.jsonl
@@ -118,16 +130,54 @@ def run_pipeline(
 def main() -> int:
     input_jsonl = os.environ.get("INPUT_JSONL", "/home/liangjunbiao/data/processed_data.jsonl")
     output_dir = os.environ.get("OUTPUT_DIR", "outputs")
-    from openai import OpenAI
+    
+    # 支持多 vLLM 实例并发
+    use_multi_vllm = os.environ.get("USE_MULTI_VLLM", "true").lower() in ("true", "1", "yes")
+    # 是否启用真正的并发处理（线程池）
+    use_concurrent = os.environ.get("USE_CONCURRENT", "true").lower() in ("true", "1", "yes")
+    # 并发线程数
+    max_workers = int(os.environ.get("MAX_WORKERS", "4"))
+    
+    if use_multi_vllm:
+        print("🚀 启用多 vLLM 实例并发模式")
+        from .multi_vllm import create_multi_vllm_client, get_vllm_urls_from_env
+        
+        # 从环境变量读取端口或 URL
+        vllm_ports_str = os.environ.get("VLLM_PORTS", "8001,8002,8003,8004")
+        vllm_host = os.environ.get("VLLM_HOST", "localhost")
+        
+        ports = [int(p.strip()) for p in vllm_ports_str.split(",")]
+        client = create_multi_vllm_client(ports=ports, host=vllm_host)
+        
+        print(f"   使用 {len(ports)} 个 vLLM 实例: 端口 {ports}")
+        if use_concurrent:
+            print(f"   真正并发模式: {max_workers} 个线程同时处理")
+        else:
+            print(f"   轮询模式: 串行处理（轮流使用实例）")
+    else:
+        print("🔧 使用单 vLLM 实例模式")
+        from openai import OpenAI
+        
+        vllm_url = os.environ.get("VLLM_URL", "http://localhost:8000/v1")
+        client = OpenAI(base_url=vllm_url, api_key="EMPTY")
+        
+        print(f"   vLLM URL: {vllm_url}")
+        use_concurrent = False  # 单实例不建议并发
 
-    client = OpenAI(
-        base_url="http://localhost:8000/v1",
-        api_key="EMPTY"  # vLLM默认不验证
+    paths = run_pipeline(
+        input_jsonl=input_jsonl, 
+        output_dir=output_dir, 
+        client=client,
+        use_concurrent=use_concurrent,
+        max_workers=max_workers
     )
-
-    paths = run_pipeline(input_jsonl=input_jsonl, output_dir=output_dir, client=client)
+    
+    print("\n" + "=" * 60)
+    print("📂 输出文件:")
+    print("=" * 60)
     for k, v in paths.items():
-        print(f"{k}: {v}")
+        print(f"  {k}: {v}")
+    
     return 0
 
 

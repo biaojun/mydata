@@ -88,6 +88,13 @@ from .pipeline import (
     run_pipeline,
 )
 
+# 多 vLLM 实例支持
+from .multi_vllm import (
+    MultiVLLMClient,
+    create_multi_vllm_client,
+    get_vllm_urls_from_env,
+)
+
 __all__ = [
     # 版本
     "__version__",
@@ -144,5 +151,9 @@ __all__ = [
     
     # Pipeline
     "run_pipeline",
+    
+    # 多 vLLM 支持
+    "MultiVLLMClient",
+    "create_multi_vllm_client",
+    "get_vllm_urls_from_env",
 ]
-
